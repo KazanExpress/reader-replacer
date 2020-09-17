@@ -41,3 +41,48 @@ func TestCorrectness(t *testing.T) {
 		t.Fatal("arrays are not equal")
 	}
 }
+
+var benchmarkFileName = "feed.xml"
+
+func BenchmarkFastReplacer(b *testing.B) {
+	var src = []byte("mvideo.ru")
+	var dst = []byte("kazanexpress.ru")
+
+	var data, err = ioutil.ReadFile(benchmarkFileName)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		var r1 = bytes.NewReader(data)
+		var fastR = NewReaderReplacer(r1, src, dst)
+		_, err := ioutil.ReadAll(fastR)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkSlowReplacer(b *testing.B) {
+	var src = []byte("mvideo.ru")
+	var dst = []byte("kazanexpress.ru")
+
+	var data, err = ioutil.ReadFile(benchmarkFileName)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		var r1 = bytes.NewReader(data)
+		var fastR, err = SlowReplace(r1, src, dst)
+		if err != nil {
+			b.Fatal(err)
+		}
+		_, err = ioutil.ReadAll(fastR)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}

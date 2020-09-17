@@ -1,7 +1,6 @@
 package replacer
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
 	"io"
@@ -13,12 +12,14 @@ type ReaderReplacer struct {
 	from        []byte
 	to          []byte
 	readyBuffer bytes.Buffer
+	tempBuffer  bytes.Buffer
+	readBuffer  []byte
 	eof         bool
 }
 
 func NewReaderReplacer(reader io.Reader, from, to []byte) io.Reader {
 	return &ReaderReplacer{
-		source: bufio.NewReader(reader),
+		source: reader, // bufio.NewReader(reader)
 		from:   from,
 		to:     to,
 	}
@@ -43,9 +44,11 @@ func (rr *ReaderReplacer) Read(p []byte) (n int, err error) {
 	}
 
 	// to find token reading buffer should be at least as len of replacing token
-	var tokenLen = len(rr.from)
-	var readBuffer = make([]byte, needToRead+tokenLen*2)
-	var readCnt, readErr = rr.source.Read(readBuffer)
+	var needToReadFromSource = needToRead + len(rr.from)*2
+	if len(rr.readBuffer) < needToReadFromSource {
+		rr.readBuffer = make([]byte, needToReadFromSource)
+	}
+	var readCnt, readErr = rr.source.Read(rr.readBuffer)
 	if readErr == io.EOF {
 		// return what left in ready buffer
 		return rr.readyBuffer.Read(p)
@@ -55,18 +58,18 @@ func (rr *ReaderReplacer) Read(p []byte) (n int, err error) {
 		return readCnt, readErr
 	}
 
-	var temp bytes.Buffer
-	var _, werr = temp.ReadFrom(&rr.readyBuffer)
+	rr.tempBuffer.Reset()
+	var _, werr = rr.tempBuffer.ReadFrom(&rr.readyBuffer)
 	if werr != nil {
 		return 0, fmt.Errorf("some shit happened - %w", werr)
 	}
 
-	_, werr = temp.Write(readBuffer[:readCnt])
+	_, werr = rr.tempBuffer.Write(rr.readBuffer[:readCnt])
 	if werr != nil {
 		return 0, fmt.Errorf("some shit happened - %w", werr)
 	}
 
-	var total = temp.Bytes()
+	var total = rr.tempBuffer.Bytes()
 	total = bytes.ReplaceAll(total, rr.from, rr.to)
 
 	_, werr = rr.readyBuffer.Write(total)
